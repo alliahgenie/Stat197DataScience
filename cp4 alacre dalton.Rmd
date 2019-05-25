@@ -1,0 +1,137 @@
+---
+title: "Course Project 4"
+author: "Alacre & Dalton"
+date: "May 25, 2019"
+output: html_document
+---
+Stat 197 - Data Science
+Course Project No. 4 
+
+#Reading files into R
+```{r dataset, echo = TRUE}
+NEI <- readRDS("summarySCC_PM25.rds")
+SCC <- readRDS("Source_Classification_Code.rds")
+```
+
+#PM 2.5 Emmisions Data
+```{r NEI, echo = TRUE}
+head(NEI)
+```
+#Source Classification Code Table
+```{r SCC, echo = TRUE}
+head(SCC)
+```
+
+#Load Packages
+```{r packages, echo = TRUE}
+library(ggplot2)
+library(plyr)
+```
+
+#Convert "year", "type", "Pollutant", "SCC", "fips" to factor
+```{r convert, echo = TRUE}
+colToFactor <- c("year", "type", "Pollutant","SCC","fips")
+NEI[,colToFactor] <- lapply(NEI[,colToFactor], factor)
+head(levels(NEI$fips))
+```
+#Convert back to NAs
+```{r convertback, echo = TRUE}
+levels(NEI$fips)[1] = NA
+NEIdata<-NEI[complete.cases(NEI),]
+colSums(is.na(NEIdata))
+```
+
+#For Task 1
+```{r 1a, echo = FALSE}
+totalEmission <- aggregate(Emissions ~ year, NEIdata, sum)
+totalEmission
+```
+```{r 1b, echo = FALSE}
+barplot(
+  (totalEmission$Emissions)/10^6,
+  names.arg=totalEmission$year,
+  xlab="Year",
+  ylab="PM2.5 Emissions (10^6 Tons)",
+  main="Total PM2.5 Emissions From All US Sources"
+)
+```
+
+#For Task 2
+```{r 2a, echo=FALSE}
+NEIdataBaltimore<-subset(NEIdata, fips == "24510")
+totalEmissionBaltimore <- aggregate(Emissions ~ year, NEIdataBaltimore, sum)
+totalEmissionBaltimore
+```
+```{r 2b, echo = FALSE}
+barplot(
+  (totalEmissionBaltimore$Emissions)/10^6,
+  names.arg=totalEmissionBaltimore$year,
+  xlab="Year",
+  ylab="PM2.5 Emissions (10^6 Tons)",
+  main="Total PM2.5 Emissions From All Baltimore City Sources"
+)
+```
+
+#For Task 3
+```{r 3, echo=FALSE}
+g<-ggplot(aes(x = year, y = Emissions, fill=type), data=NEIdataBaltimore)
+g+geom_bar(stat="identity")+
+  facet_grid(.~type)+
+  labs(x="year", y=expression("Total PM"[2.5]*" Emission (Tons)")) + 
+  labs(title=expression("PM"[2.5]*" Emissions, Baltimore City 1999-2008 by Source Type"))+
+  guides(fill=FALSE)
+```
+
+#For Task 4
+```{r 4a, echo = FALSE}
+names(SCC)<-gsub("\\.","", names(SCC))
+SCCcombustion<-grepl(pattern = "comb", SCC$SCCLevelOne, ignore.case = TRUE)
+SCCCoal<-grepl(pattern = "coal", SCC$SCCLevelFour, ignore.case = TRUE)
+SCCCoalCombustionSCC<-SCC[SCCcombustion & SCCCoal,]$SCC
+NIECoalCombustionValues<-NEIdata[NEIdata$SCC %in% SCCCoalCombustionSCC,]
+NIECoalCombustionTotalEm<-aggregate(Emissions~year, NIECoalCombustionValues, sum)
+```
+```{r 4b, echo = FALSE }
+g<-ggplot(aes(year, Emissions/10^5), data=NIECoalCombustionTotalEm)
+g+geom_bar(stat="identity",fill="grey",width=0.75) +
+  guides(fill=FALSE) +
+  labs(x="year", y=expression("Total PM"[2.5]*" Emission (10^5 Tons)")) + 
+  labs(title=expression("PM"[2.5]*" Coal Combustion Source Emissions Across US from 1999-2008"))
+```
+
+#For Task 5
+```{r 5a, echo = FALSE}
+SCCvehicle<-grepl(pattern = "vehicle", SCC$EISector, ignore.case = TRUE)
+SCCvehicleSCC <- SCC[SCCvehicle,]$SCC
+NEIvehicleSSC <- NEIdata[NEIdata$SCC %in% SCCvehicleSCC, ]
+NEIvehicleBaltimore <- subset(NEIvehicleSSC, fips == "24510")
+NIEvehicleBaltimoreTotEm<-aggregate(Emissions~year, NEIvehicleBaltimore, sum)
+```
+```{r 5b, echo = FALSE}
+g<-ggplot(aes(year, Emissions/10^5), data=NIEvehicleBaltimoreTotEm)
+g+geom_bar(stat="identity",fill="grey",width=0.75) +
+  guides(fill=FALSE) +
+  labs(x="year", y=expression("Total PM"[2.5]*" Emission (10^5 Tons)")) + 
+  labs(title=expression("PM"[2.5]*" Motor Vehicle Source Emissions in Baltimore from 1999-2008"))
+```
+
+#For Task 6
+```{r 6a, echo = FALSE}
+NEIvehicleBalti<-subset(NEIvehicleSSC, fips == "24510")
+NEIvehicleBalti$city <- "Baltimore City"
+NEIvehiclela<-subset(NEIvehicleSSC, fips == "06037")
+NEIvehiclela$city <- "Los Angeles County"
+NEIBothCity <- rbind(NEIvehicleBalti, NEIvehiclela)
+```
+```{r 6b, echo = FALSE}
+ ggplot(NEIBothCity, aes(x=year, y=Emissions, fill=city)) +
+  geom_bar(aes(fill=year),stat="identity") +
+ facet_grid(.~city) +
+ guides(fill=FALSE) + theme_bw() +
+ labs(x="year", y=expression("Total PM"[2.5]*" Emission (Kilo-Tons)")) + 
+ labs(title=expression("PM"[2.5]*" Motor Vehicle Source Emissions in Baltimore & LA, 1999-2008"))
+```
+```{r 6c, echo = FALSE}
+aggregateEmissions <- aggregate(Emissions~city+year, data=NEIBothCity, sum)
+aggregate(Emissions~city, data=aggregateEmissions, range)
+```
